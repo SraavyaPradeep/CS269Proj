@@ -15,8 +15,10 @@ import datasets
 from multiscaleloss import multiscaleEPE, realEPE
 import datetime
 from torch.utils.tensorboard import SummaryWriter
-from util import flow2rgb, AverageMeter, save_checkpoint
+from util import flow2rgb, AverageMeter, save_checkpoint, stack_images_as_channels
 import numpy as np
+from .occNerfDataset import OccNerfDataset
+from .loadData import createData
 
 model_names = sorted(
     name for name in models.__dict__ if name.islower() and not name.startswith("__")
@@ -27,14 +29,14 @@ parser = argparse.ArgumentParser(
     description="PyTorch FlowNet Training on several datasets",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument("data", metavar="DIR", help="path to dataset")
-parser.add_argument(
-    "--dataset",
-    metavar="DATASET",
-    default="flying_chairs",
-    choices=dataset_names,
-    help="dataset type : " + " | ".join(dataset_names),
-)
+# parser.add_argument("data", metavar="DIR", help="path to dataset")
+# parser.add_argument(
+#     "--dataset",
+#     metavar="DATASET",
+#     default="flying_chairs",
+#     choices=dataset_names,
+#     help="dataset type : " + " | ".join(dataset_names),
+# )
 group = parser.add_mutually_exclusive_group()
 group.add_argument(
     "-s", "--split-file", default=None, type=str, help="test-val split file"
@@ -170,25 +172,6 @@ best_EPE = -1
 n_iter = 0
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-import torch
-from torch.utils.data import Dataset, DataLoader
-
-class CustomDataset(Dataset):
-    def __init__(self, input1_data, input2_data):
-        self.input1_data = input1_data
-        self.input2_data = input2_data
-
-    def __len__(self):
-        return 1  # Assuming all inputs have the same length
-
-    def __getitem__(self, idx):
-        input1 = self.input1_data[idx]
-        input2 = self.input2_data[idx]
-        return input1, input2
-
-# Assuming you have your data loaded into input1_data, input2_data, and label_data
-# Initialize your custom dataset
-
 def main():
     global args, best_EPE, n_iter
     args = parser.parse_args()
@@ -200,10 +183,10 @@ def main():
         args.batch_size,
         args.lr,
     )
-    if not args.no_date:
-        timestamp = datetime.datetime.now().strftime("%m-%d-%H:%M")
-        save_path = os.path.join(timestamp, save_path)
-    save_path = os.path.join(args.dataset, save_path)
+    # if not args.no_date:
+    #     timestamp = datetime.datetime.now().strftime("%m-%d-%H:%M")
+    #     save_path = os.path.join(timestamp, save_path)
+    # save_path = os.path.join(args.dataset, save_path)
     print("=> will save everything to {}".format(save_path))
     if not os.path.exists(save_path):
         os.makedirs(save_path)
@@ -214,6 +197,7 @@ def main():
     train_writer = SummaryWriter(os.path.join(save_path, "train"))
     test_writer = SummaryWriter(os.path.join(save_path, "test"))
     output_writers = []
+
     for i in range(3):
         output_writers.append(SummaryWriter(os.path.join(save_path, "test", str(i))))
 
@@ -253,7 +237,7 @@ def main():
             ]
         )
 
-    print("=> fetching img pairs in '{}'".format(args.data))
+    # print("=> fetching img pairs in '{}'".format(args.data))
     
     # train_set, test_set = datasets.__dict__[args.dataset](
     #     args.data,
@@ -263,11 +247,8 @@ def main():
     #     split=args.split_file if args.split_file else args.split_value,
     #     split_save_path=os.path.join(save_path, "split.txt"),
     # )
-    train_set = CustomDataset(torch.randn(1, 18, 300, 300, 24), 
-                            torch.randn(1, 18, 300, 300, 24))
-     
-    test_set = CustomDataset(torch.randn(1, 18, 300, 300, 24), 
-                            torch.randn(1, 18, 300, 300, 24))
+
+    train_set, test_set = createData()
     print(
         "{} samples found, {} train samples and {} test samples ".format(
             len(test_set) + len(train_set), len(train_set), len(test_set)
@@ -379,42 +360,20 @@ def train(train_loader, model, optimizer, epoch, train_writer):
 
     end = time.time()
 
-    for i, (input1, input2) in enumerate(train_loader):
+    for i, (input1, input2, target) in enumerate(train_loader):
         
-
-
         # measure data loading time
         data_time.update(time.time() - end)
         # target = target.to(device)
-        # input = torch.cat(input, 1).to(device)
+        # input1, input2 = input1[0].to(device), input2[0].to(device)
 
         input1, input2 = input1[0], input2[0]
-        print(input1.shape)
-
-
-        def stack_images_as_channels(images):
-            # Convert each image to a numpy array (Assuming images are already numpy arrays of shape 300x300x24)
-            np_images = [np.array(img) for img in images]
-
-            # Stack images along the channel dimension
-            stacked_image = np.concatenate(np_images, axis=-1)
-
-            return stacked_image
-
-        combined_image_1 = torch.tensor(stack_images_as_channels(input1))
-        combined_image_2 = torch.tensor(stack_images_as_channels(input2))
-
-        input_tensor1 = combined_image_1.unsqueeze(0)
-        input_tensor2 = combined_image_2.unsqueeze(0)
-
-        input_tensor1 = input_tensor1.permute(0, 3, 1, 2)
-        input_tensor2 = input_tensor2.permute(0, 3, 1, 2)
-
-        target = torch.randn(1, 2, 300, 300)
-        # input = torch.cat(input, 1)
+        input1 = torch.tensor(stack_images_as_channels(input1)).unsqueeze(0).permute(0, 3, 1, 2)
+        input2 = torch.tensor(stack_images_as_channels(input2)).unsqueeze(0).permute(0, 3, 1, 2)
 
         # compute output
-        output = model(input_tensor1, input_tensor2)
+        output = model(input1, input2)
+
         if args.sparse:
             # Since Target pooling is not very precise when sparse,
             # take the highest resolution prediction and upsample it instead of downsampling target
@@ -469,48 +428,25 @@ def validate(val_loader, model, epoch, output_writers):
     model.eval()
 
     end = time.time()
-    for i, (input1, input2) in enumerate(val_loader):
-        
 
+    for i, (input1, input2, target) in enumerate(val_loader):
+        
         # measure data loading time
-        data_time.update(time.time() - end)
+        batch_time.update(time.time() - end)
         # target = target.to(device)
-        # input = torch.cat(input, 1).to(device)
+        # input1, input2 = input1[0].to(device), input2[0].to(device)
 
         input1, input2 = input1[0], input2[0]
         print(input1.shape)
 
-
-        def stack_images_as_channels(images):
-            # Convert each image to a numpy array (Assuming images are already numpy arrays of shape 300x300x24)
-            np_images = [np.array(img) for img in images]
-
-            # Stack images along the channel dimension
-            stacked_image = np.concatenate(np_images, axis=-1)
-
-            return stacked_image
-
-        combined_image_1 = torch.tensor(stack_images_as_channels(input1))
-        combined_image_2 = torch.tensor(stack_images_as_channels(input2))
-
-        input_tensor1 = combined_image_1.unsqueeze(0)
-        input_tensor2 = combined_image_2.unsqueeze(0)
-
-        input_tensor1 = input_tensor1.permute(0, 3, 1, 2)
-        input_tensor2 = input_tensor2.permute(0, 3, 1, 2)
-
-        target = torch.randn(1, 2, 300, 300)
-        # input = torch.cat(input, 1)
+        input1 = torch.tensor(stack_images_as_channels(input1)).unsqueeze(0).permute(0, 3, 1, 2)
+        input2 = torch.tensor(stack_images_as_channels(input2)).unsqueeze(0).permute(0, 3, 1, 2)
 
         if args.attack_type != 'None':
             input.requires_grad = True # for attack
 
         # compute output
-        output = model(input_tensor1, input_tensor2)
-        # compute output
-        
-
-        # output = model(input)
+        output = model(input1, input2)
 
         if args.attack_type != 'None':
             ori = input.data
