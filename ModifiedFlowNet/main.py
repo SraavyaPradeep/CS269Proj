@@ -216,8 +216,8 @@ def main():
         ]
     )
 
-    if "KITTI" in args.dataset:
-        args.sparse = True
+    # if "KITTI" in args.dataset:
+    #     args.sparse = True
     if args.sparse:
         co_transform = flow_transforms.Compose(
             [
