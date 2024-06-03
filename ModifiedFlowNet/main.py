@@ -170,7 +170,7 @@ parser.add_argument('--channel', help='Color channel options: 0, 1, 2, -1 (all)'
 
 best_EPE = -1
 n_iter = 0
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def main():
     global args, best_EPE, n_iter
@@ -279,7 +279,7 @@ def main():
         network_data = None
         print("=> creating model '{}'".format(args.arch))
 
-    # model = models.__dict__[args.arch](network_data).to(device)
+    model = models.__dict__[args.arch](network_data).to(device)
     model = models.__dict__[args.arch](network_data)
 
     assert args.solver in ["adam", "sgd"]
@@ -289,11 +289,9 @@ def main():
         {"params": model.weight_parameters(), "weight_decay": args.weight_decay},
     ]
 
-    # if device.type == "cuda":
-    #     # model = torch.nn.DataParallel(model).cuda()
-    #     model = torch.nn.DataParallel(model)
-    #     # cudnn.benchmark = True
-    #     cudnn.benchmark = False
+    if device.type == "cuda":
+        model = torch.nn.DataParallel(model)
+        cudnn.benchmark = False
 
     if args.solver == "adam":
         optimizer = torch.optim.Adam(
@@ -333,7 +331,7 @@ def main():
             {
                 "epoch": epoch + 1,
                 "arch": args.arch,
-                "state_dict": model.module.state_dict(),
+                "state_dict": model.state_dict(),
                 "best_EPE": best_EPE,
                 "div_flow": args.div_flow,
             },
@@ -364,13 +362,16 @@ def train(train_loader, model, optimizer, epoch, train_writer):
         
         # measure data loading time
         data_time.update(time.time() - end)
-        # target = target.to(device)
-        # input1, input2 = input1[0].to(device), input2[0].to(device)
 
-        input1, input2 = input1[0], input2[0]
+        input1, input2 = input1[0], input2[0] 
+            
         input1 = torch.tensor(stack_images_as_channels(input1)).unsqueeze(0).permute(0, 3, 1, 2)
         input2 = torch.tensor(stack_images_as_channels(input2)).unsqueeze(0).permute(0, 3, 1, 2)
 
+        if device.type == "cuda":
+            target = target.to(device)
+            input1, input2 = input1.to(device), input2.to(device)
+        
         # compute output
         output = model(input1, input2)
 
@@ -433,15 +434,18 @@ def validate(val_loader, model, epoch, output_writers):
         
         # measure data loading time
         batch_time.update(time.time() - end)
-        # target = target.to(device)
-        # input1, input2 = input1[0].to(device), input2[0].to(device)
-
-        input1, input2 = input1[0], input2[0]
-        print(input1.shape)
-
+      
+        input1, input2 = input1[0], input2[0] 
+            
         input1 = torch.tensor(stack_images_as_channels(input1)).unsqueeze(0).permute(0, 3, 1, 2)
         input2 = torch.tensor(stack_images_as_channels(input2)).unsqueeze(0).permute(0, 3, 1, 2)
 
+        if device.type == "cuda":
+            target = target.to(device)
+            input1, input2 = input1.to(device), input2.to(device)
+        
+        # compute output
+        output = model(input1, input2)
         if args.attack_type != 'None':
             input.requires_grad = True # for attack
 
@@ -489,25 +493,26 @@ def validate(val_loader, model, epoch, output_writers):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i < len(output_writers):  # log first output of first batches
-            if epoch == args.start_epoch:
-                mean_values = torch.tensor(
-                    [0.45, 0.432, 0.411], dtype=input.dtype
-                ).view(3, 1, 1)
-                output_writers[i].add_image(
-                    "GroundTruth", flow2rgb(args.div_flow * target[0], max_value=10), 0
-                )
-                output_writers[i].add_image(
-                    "Inputs", (input[0, :3].cpu() + mean_values).clamp(0, 1), 0
-                )
-                output_writers[i].add_image(
-                    "Inputs", (input[0, 3:].cpu() + mean_values).clamp(0, 1), 1
-                )
-            output_writers[i].add_image(
-                "FlowNet Outputs",
-                flow2rgb(args.div_flow * output[0], max_value=10),
-                epoch,
-            )
+        # if i < len(output_writers):  # log first output of first batches
+        #     if epoch == args.start_epoch:
+        #         mean_values = torch.tensor([0.45, 0.432, 0.411], 
+        #                                     dtype=torch.float32).view(3, 1, 1)
+
+        #         output_writers[i].add_image(
+        #             "GroundTruth", flow2rgb(args.div_flow * target[0], max_value=10), 0
+        #         )
+        #         output_writers[i].add_image(
+        #             "Inputs", (input1.cpu() + mean_values).clamp(0, 1), 0
+        #         )
+        #         output_writers[i].add_image(
+        #             "Inputs", (input2.cpu() + mean_values).clamp(0, 1), 1
+        #         )
+        #     output_writers[i].add_image(
+        #         "FlowNet Outputs",
+        #         flow2rgb(args.div_flow * output[0], max_value=10),
+        #         epoch,
+        #     )
+
 
         if i % args.print_freq == 0:
             print(
