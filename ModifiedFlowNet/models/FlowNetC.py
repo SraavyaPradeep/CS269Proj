@@ -3,8 +3,8 @@ import torch.nn as nn
 from torch.nn.init import kaiming_normal_, constant_
 from .util import conv, predict_flow, deconv, crop_like, correlate
 
-__all__ = ["flownetc", "flownetc_bn"]
 
+__all__ = ["flownetc", "flownetc_bn"]
 
 class FlowNetC(nn.Module):
     expansion = 1
