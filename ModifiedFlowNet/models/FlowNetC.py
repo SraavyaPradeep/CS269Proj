@@ -96,9 +96,7 @@ class FlowNetC(nn.Module):
             flow3 = self.predict_flow3(concat3)
             flow3_up = crop_like(self.upsampled_flow3_to_2(flow3), out_conv_redir1)
             out_deconv2 = crop_like(self.deconv2(concat3), out_conv_redir1)
-            print(out_conv_redir1.shape)
-            print(out_deconv2.shape)
-            print(flow3_up.shape)
+            
             concat2 = torch.cat((out_conv_redir1, out_deconv2, flow3_up), 1)
             flow2 = self.predict_flow2(concat2)
 
