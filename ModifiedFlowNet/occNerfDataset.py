@@ -8,7 +8,7 @@ class OccNerfDataset(Dataset):
         self.label = label #1x2x300x300
 
     def __len__(self):
-        return len(self.label_data)
+        return len(self.label)
 
     def __getitem__(self, idx):
         input1 = self.input1_data[idx]
