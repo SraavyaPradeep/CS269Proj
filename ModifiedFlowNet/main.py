@@ -17,7 +17,7 @@ import datetime
 from torch.utils.tensorboard import SummaryWriter
 from util import flow2rgb, AverageMeter, save_checkpoint, stack_images_as_channels
 import numpy as np
-from .occNerfDataset import OccNerfDataset
+from occNerfDataset import OccNerfDataset
 from .loadData import createData
 
 model_names = sorted(
