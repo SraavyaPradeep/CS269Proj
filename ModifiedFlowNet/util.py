@@ -48,3 +48,8 @@ def flow2rgb(flow_map, max_value):
     rgb_map[1] -= 0.5 * (normalized_flow_map[0] + normalized_flow_map[1])
     rgb_map[2] += normalized_flow_map[1]
     return rgb_map.clip(0, 1)
+
+def stack_images_as_channels(images):
+    np_images = [np.array(img) for img in images]
+    stacked_image = np.concatenate(np_images, axis=-1)
+    return stacked_image
