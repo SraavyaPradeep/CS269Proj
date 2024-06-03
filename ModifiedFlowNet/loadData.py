@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
-from .occNerfDataset import OccNerfDataset
+from occNerfDataset import OccNerfDataset
 
 def createData():
     train_set = OccNerfDataset(torch.randn(1, 18, 300, 300, 24), 
