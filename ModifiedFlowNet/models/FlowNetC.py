@@ -13,7 +13,7 @@ class FlowNetC(nn.Module):
         super(FlowNetC, self).__init__()
 
         self.batchNorm = batchNorm
-        self.conv_redir = conv(self.batchNorm, 432, 32, kernel_size=1, stride=1)
+        self.conv_redir = conv(self.batchNorm, 64, 32, kernel_size=1, stride=1)
 
         self.conv3_1 = conv(self.batchNorm, 473, 256)  # Adjust input channels for concatenation
         self.conv4 = conv(self.batchNorm, 256, 512, stride=2)
