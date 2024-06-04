@@ -363,11 +363,6 @@ def train(train_loader, model, optimizer, epoch, train_writer):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        input1, input2 = input1[0], input2[0] 
-            
-        input1 = torch.tensor(stack_images_as_channels(input1)).unsqueeze(0).permute(0, 3, 1, 2).contiguous()
-        input2 = torch.tensor(stack_images_as_channels(input2)).unsqueeze(0).permute(0, 3, 1, 2).contiguous()
-
         if device.type == "cuda":
             target = target.to(device)
             input1, input2 = input1.to(device), input2.to(device)
@@ -434,12 +429,7 @@ def validate(val_loader, model, epoch, output_writers):
         
         # measure data loading time
         batch_time.update(time.time() - end)
-      
-        input1, input2 = input1[0], input2[0] 
-            
-        input1 = torch.tensor(stack_images_as_channels(input1)).unsqueeze(0).permute(0, 3, 1, 2).contiguous()
-        input2 = torch.tensor(stack_images_as_channels(input2)).unsqueeze(0).permute(0, 3, 1, 2).contiguous()
-
+        
         if device.type == "cuda":
             target = target.to(device)
             input1, input2 = input1.to(device), input2.to(device)
