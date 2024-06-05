@@ -368,14 +368,19 @@ def train(train_loader, model, optimizer, epoch, train_writer):
             input1, input2 = input1.to(device), input2.to(device)
         
         # compute output
-        output = model(input1, input2)
+        output = []
+        for i in range(input1.shape[0]):
+            output.append(model(input1[i].unsqueeze(0), input2[i].unsqueeze(0)))
+        # TODO: You need to modify the next line according to the final output of your model
+        # I assume the shape of output should be 1 * 900 * 1600 * 2
+        output = torch.cat(output)
 
         if args.sparse:
             # Since Target pooling is not very precise when sparse,
             # take the highest resolution prediction and upsample it instead of downsampling target
             h, w = target.size()[-2:]
             output = [F.interpolate(output[0], (h, w)), *output[1:]]
-
+        # TODO: I am not sure whether the loss part is correct, if you think they are correct just erase this todo.
         loss = multiscaleEPE(
             output, target, weights=args.multiscale_weights, sparse=args.sparse
         )
