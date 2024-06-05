@@ -1,0 +1,1 @@
+python main.py -b8 -j8 -a flownetc --epochs=100

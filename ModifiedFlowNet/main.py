@@ -280,7 +280,7 @@ def main():
         print("=> creating model '{}'".format(args.arch))
 
     model = models.__dict__[args.arch](network_data).to(device)
-    model = models.__dict__[args.arch](network_data)
+    # model = models.__dict__[args.arch](network_data)
 
     assert args.solver in ["adam", "sgd"]
     print("=> setting {} solver".format(args.solver))
@@ -369,8 +369,8 @@ def train(train_loader, model, optimizer, epoch, train_writer):
         
         # compute output
         net_output = []
-        for i in range(input1.shape[0]):
-            net_output.append(model(input1[i].unsqueeze(0), input2[i].unsqueeze(0)))
+        for i in range(input1.shape[1]):
+            net_output.append(model(input1[:, i], input2[:, i]))
         # TODO: You need to modify the next line according to the final output of your model
         # I assume the shape of output should be 1 * 900 * 1600 * 2
         net_output = torch.cat(net_output)
