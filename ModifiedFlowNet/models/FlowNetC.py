@@ -39,6 +39,8 @@ class FlowNetC(nn.Module):
         self.upsampled_flow4_to_3 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
         self.upsampled_flow3_to_2 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
 
+        self.upsample = nn.Upsample(size=(900, 1600), mode='bilinear', align_corners=True)
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
                 kaiming_normal_(m.weight, 0.1)
@@ -47,6 +49,7 @@ class FlowNetC(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 constant_(m.weight, 1)
                 constant_(m.bias, 0)
+        
 
 
     def correlate(input1, input2):
@@ -67,18 +70,23 @@ class FlowNetC(nn.Module):
 
     def forward(self, x1, x2):
 
-            out_conv_redir1 = self.conv_redir(x1)
-            out_conv_redir2 = self.conv_redir(x2)
+            out_conv_redir1 = self.upsample(self.conv_redir(x1))
+            # print(out_conv_redir1.shape)
+            out_conv_redir2 = self.upsample(self.conv_redir(x2))
 
             out_correlation = correlate(out_conv_redir1, out_conv_redir2)
             in_conv3_1 = torch.cat([out_conv_redir1, out_correlation], dim=1)
-
+            
             out_conv3 = self.conv3_1(in_conv3_1)
+            
             out_conv4 = self.conv4_1(self.conv4(out_conv3))
             out_conv5 = self.conv5_1(self.conv5(out_conv4))
             out_conv6 = self.conv6_1(self.conv6(out_conv5))
 
+            # print(out_conv3.shape, out_conv4.shape, out_conv5.shape, out_conv6.shape)
+
             flow6 = self.predict_flow6(out_conv6)
+            # print(flow6.shape)
             flow6_up = crop_like(self.upsampled_flow6_to_5(flow6), out_conv5)
             out_deconv5 = crop_like(self.deconv5(out_conv6), out_conv5)
 
@@ -99,6 +107,8 @@ class FlowNetC(nn.Module):
             
             concat2 = torch.cat((out_conv_redir1, out_deconv2, flow3_up), 1)
             flow2 = self.predict_flow2(concat2)
+
+            # return flow2_up
 
             if self.training:
                 return flow2, flow3, flow4, flow5, flow6
