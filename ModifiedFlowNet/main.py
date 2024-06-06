@@ -121,11 +121,11 @@ parser.add_argument(
 parser.add_argument(
     "--multiscale-weights",
     "-w",
-    default=[0.005, 0.01, 0.02, 0.08, 0.32],
+    default=[0.32],
     type=float,
-    nargs=5,
+    nargs=1,
     help="training weight for each scale, from highest resolution (flow2) to lowest (flow6)",
-    metavar=("W2", "W3", "W4", "W5", "W6"),
+    metavar=("W6"),
 )
 parser.add_argument(
     "--sparse",
@@ -311,7 +311,7 @@ def main():
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch
         train_loss, train_EPE = train(
-            train_loader, model, optimizer, epoch, train_writer
+            train_loader, model, optimizer, epoch, train_writer, args.epochs
         )
         scheduler.step()
         train_writer.add_scalar("mean EPE", train_EPE, epoch)
@@ -340,7 +340,7 @@ def main():
         )
 
 
-def train(train_loader, model, optimizer, epoch, train_writer):
+def train(train_loader, model, optimizer, epoch, train_writer, num_epochs):
     global n_iter, args
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -357,59 +357,60 @@ def train(train_loader, model, optimizer, epoch, train_writer):
     model.train()
 
     end = time.time()
+    from tqdm import tqdm
+    with tqdm(total=len(train_loader), desc=f'Epoch {epoch + 1}/{num_epochs}', unit='batch') as pbar:
+        for i, (input1, input2, target) in enumerate(train_loader):
 
-    for i, (input1, input2, target) in enumerate(train_loader):
-        
-        # measure data loading time
-        data_time.update(time.time() - end)
+            # measure data loading time
+            data_time.update(time.time() - end)
 
-        if device.type == "cuda":
-            target = target.to(device)
-            input1, input2 = input1.to(device), input2.to(device)
-        
-        # compute output
-        net_output = []
-        for i in range(input1.shape[1]):
-            net_output.append(model(input1[:, i], input2[:, i]))
-        # TODO: You need to modify the next line according to the final output of your model
-        # I assume the shape of output should be 1 * 900 * 1600 * 2
-        net_output = torch.cat(net_output)
-        output = [net_output for i in range(5)]
-        target = [target for i in range(5)]
+            if device.type == "cuda":
+                target = target.to(device)
+                input1, input2 = input1.to(device), input2.to(device)
+            # compute output
+            for i in range(input1.shape[1]):
+                opt, _, _, _ = model(input1[:, i], input2[:, i])
+            # TODO: You need to modify the next line according to the final output of your model
+            # I assume the shape of output should be 1 * 900 * 1600 * 2
+                output = [opt]
+                target_i = target[:, i].permute(0,3,1,2)
 
-        if args.sparse:
-            # Since Target pooling is not very precise when sparse,
-            # take the highest resolution prediction and upsample it instead of downsampling target
-            h, w = target.size()[-2:]
-            output = [F.interpolate(output[0], (h, w)), *output[1:]]
-        # TODO: I am not sure whether the loss part is correct, if you think they are correct just erase this todo.
-        loss = multiscaleEPE(
-            output, target, weights=args.multiscale_weights, sparse=args.sparse
-        )
-        flow2_EPE = args.div_flow * realEPE(output[0], target, sparse=args.sparse)
-        # record loss and EPE
-        losses.update(loss.item(), target.size(0))
-        train_writer.add_scalar("train_loss", loss.item(), n_iter)
-        flow2_EPEs.update(flow2_EPE.item(), target.size(0))
-
-        # compute gradient and do optimization step
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
-
-        if i % args.print_freq == 0:
-            print(
-                "Epoch: [{0}][{1}/{2}]\t Time {3}\t Data {4}\t Loss {5}\t EPE {6}".format(
-                    epoch, i, epoch_size, batch_time, data_time, losses, flow2_EPEs
+                if args.sparse:
+                    # Since Target pooling is not very precise when sparse,
+                    # take the highest resolution prediction and upsample it instead of downsampling target
+                    h, w = target.size()[-2:]
+                    output = [F.interpolate(output[0], (h, w)), *output[1:]]
+                # TODO: I am not sure whether the loss part is correct, if you think they are correct just erase this todo.
+                loss = multiscaleEPE(
+                    output, target_i, weights=args.multiscale_weights, sparse=args.sparse
                 )
-            )
-        n_iter += 1
-        if i >= epoch_size:
-            break
+                flow2_EPE = args.div_flow * realEPE(output[0], target_i, sparse=args.sparse)
+                # record loss and EPE
+                losses.update(loss.item(), target.size(0))
+                train_writer.add_scalar("train_loss", loss.item(), n_iter)
+                flow2_EPEs.update(flow2_EPE.item(), target.size(0))
+
+                # compute gradient and do optimization step
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if i % args.print_freq == 0:
+                print(
+                    "Epoch: [{0}][{1}/{2}]\t Time {3}\t Data {4}\t Loss {5}\t EPE {6}".format(
+                        epoch, i, epoch_size, batch_time, data_time, losses, flow2_EPEs
+                    )
+                )
+            n_iter += 1
+            if i >= epoch_size:
+                break
+
+            pbar.update(1)
+            pbar.set_postfix(loss=loss.item())
 
     return losses.avg, flow2_EPEs.avg
 

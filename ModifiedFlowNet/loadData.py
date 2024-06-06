@@ -146,12 +146,12 @@ def readFlow(fn):
 #     return train_set, test_set
 
 def createData():
-    with open("../train.pkl", 'rb') as f:
+    with open("./train.pkl", 'rb') as f:
         train_data = pickle.load(f)
     train_set = OccNerfDataset(train_data['input_1'],
                                train_data['input_2'],
                                train_data['gt'])
-    with open("../val.pkl", 'rb') as f:
+    with open("./val.pkl", 'rb') as f:
         val_data = pickle.load(f)
     val_set = OccNerfDataset(val_data['input_1'],
                                val_data['input_2'],

@@ -1,1 +1,1 @@
-python main.py -b8 -j8 -a flownetc --epochs=100
+CUDA_VISIBLE_DEVICES=3,4,5 python main.py -b1 -j1 -a flownetc --epochs=100
